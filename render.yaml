@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: excel-lookup-app
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run main.py --server.port=$PORT --server.enableCORS=false
+    plan: free
