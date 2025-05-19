@@ -6,7 +6,7 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 
 st.set_page_config(page_title="Excel Lookup Tool", layout="centered")
 
-# CSS cho giao diện (giữ nguyên nhưng có thể xóa nếu không cần hình nền)
+# CSS cho giao diện
 page_bg_img = '''
 <style>
 body {
@@ -33,28 +33,36 @@ if option == "🔁 Lookup Bán ra & NXT":
     if ban_ra_file and nxt_t4_file:
         if st.button("🚀 Chạy Lookup"):
             try:
-                # Đọc chỉ các cột cần thiết để tiết kiệm bộ nhớ
-                ban_ra_df = pd.read_excel(
-                    ban_ra_file, sheet_name="Smart_KTSC_OK", usecols=[16, 25], dtype={16: str, 25: float}
-                )
-                nxt_t4_df = pd.read_excel(
-                    nxt_t4_file, sheet_name="F8_D", skiprows=22, usecols=[2, 4, 14], dtype={2: str, 4: str, 14: float}
-                )
-                nxt_t4_df.columns = ['target_col', 'match_col', 'compare_col']
+                # Đọc toàn bộ sheet nhưng kiểm tra số cột
+                ban_ra_df = pd.read_excel(ban_ra_file, sheet_name="Smart_KTSC_OK")
+                if ban_ra_df.shape[1] < 26:
+                    st.error(f"Sheet 'Smart_KTSC_OK' chỉ có {ban_ra_df.shape[1]} cột, cần ít nhất 26 cột.")
+                    st.stop()
 
-                q_col = ban_ra_df.columns[0]  # Cột 16 sau khi lọc
-                z_col = ban_ra_df.columns[1]  # Cột 25 sau khi lọc
+                nxt_t4_df = pd.read_excel(nxt_t4_file, sheet_name="F8_D", skiprows=22)
+                if nxt_t4_df.shape[1] < 15:
+                    st.error(f"Sheet 'F8_D' chỉ có {nxt_t4_df.shape[1]} cột, cần ít nhất 15 cột.")
+                    st.stop()
 
-                # Vector hóa lookup thay vì vòng lặp
+                # Đặt tên cột
+                nxt_t4_df.columns.values[[2, 4, 14]] = ['target_col', 'match_col', 'compare_col']
+                q_col = ban_ra_df.columns[16]
+                z_col = ban_ra_df.columns[25]
+
+                # Vector hóa lookup
                 merged = ban_ra_df.merge(nxt_t4_df, left_on=q_col, right_on='match_col', how='left')
                 merged = merged[merged['compare_col'] <= merged[z_col]].copy()
-                merged['diff'] = merged[z_col] - merged['compare_col']
-                result_df = merged.loc[merged.groupby(q_col)['diff'].idxmin(), ['target_col']].reset_index()
-                ban_ra_df['lookup_result'] = ban_ra_df[q_col].map(
-                    result_df.set_index(q_col)['target_col']
-                ).fillna("Không tìm thấy")
+                if merged.empty:
+                    st.warning("Không tìm thấy kết quả khớp nào.")
+                    ban_ra_df['lookup_result'] = "Không tìm thấy"
+                else:
+                    merged['diff'] = merged[z_col] - merged['compare_col']
+                    result_df = merged.loc[merged.groupby(q_col)['diff'].idxmin(), ['target_col']].reset_index()
+                    ban_ra_df['lookup_result'] = ban_ra_df[q_col].map(
+                        result_df.set_index(q_col)['target_col']
+                    ).fillna("Không tìm thấy")
 
-                # Ghi kết quả trực tiếp vào Excel mới
+                # Ghi kết quả
                 output = BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     ban_ra_df.to_excel(writer, index=False, sheet_name="Smart_KTSC_OK")
@@ -67,8 +75,10 @@ if option == "🔁 Lookup Bán ra & NXT":
                     file_name="BAN_RA_lookup_result.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
+            except ValueError as ve:
+                st.error(f"Lỗi: Sheet không tồn tại hoặc không đọc được. Chi tiết: {str(ve)}")
             except Exception as e:
-                st.error(f"Lỗi khi xử lý: {str(e)}")
+                st.error(f"Lỗi: {str(e)}")
 
 # --- Chức năng 2: Lookup theo mapping ---
 elif option == "📄 Lookup theo mapping":
@@ -83,11 +93,19 @@ elif option == "📄 Lookup theo mapping":
     if data_file and mapping_file:
         if st.button("🚀 Chạy Lookup Mapping"):
             try:
-                # Đọc chỉ các cột cần thiết
-                data_df = pd.read_excel(data_file, usecols=[0, 4], dtype={0: str, 4: float})
-                mapping_df = pd.read_excel(mapping_file, usecols=[2, 4, 6], dtype={2: str, 4: str, 6: float})
-                data_df.columns = ['TENDM', 'DGVND']
-                mapping_df.columns = ['target_col', 'match_col', 'compare_col']
+                # Đọc toàn bộ sheet nhưng kiểm tra số cột
+                data_df = pd.read_excel(data_file)
+                mapping_df = pd.read_excel(mapping_file)
+                if data_df.shape[1] < 5:
+                    st.error(f"File Data chỉ có {data_df.shape[1]} cột, cần ít nhất 5 cột.")
+                    st.stop()
+                if mapping_df.shape[1] < 7:
+                    st.error(f"File Mapping chỉ có {mapping_df.shape[1]} cột, cần ít nhất 7 cột.")
+                    st.stop()
+
+                # Đặt tên cột
+                data_df.columns.values[[0, 4]] = ['TENDM', 'DGVND']
+                mapping_df.columns.values[[2, 4, 6]] = ['target_col', 'match_col', 'compare_col']
 
                 # Hàm làm sạch text
                 def clean_text(val):
@@ -100,7 +118,6 @@ elif option == "📄 Lookup theo mapping":
                 mapping_df['match_col'] = mapping_df['match_col'].apply(clean_text)
                 mapping_df['compare_col'] = pd.to_numeric(mapping_df['compare_col'], errors='coerce')
 
-                # Gộp và lọc theo sai số
                 merged = data_df.merge(mapping_df, left_on='TENDM', right_on='match_col', how='left')
                 merged['error'] = abs(merged['compare_col'] - merged['DGVND']) / merged['DGVND']
                 filtered = merged[
@@ -126,5 +143,7 @@ elif option == "📄 Lookup theo mapping":
                     file_name="data_lookup_result.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
+            except ValueError as ve:
+                st.error(f"Lỗi: Sheet không tồn tại hoặc không đọc được. Chi tiết: {str(ve)}")
             except Exception as e:
-                st.error(f"Lỗi khi xử lý: {str(e)}")
+                st.error(f"Lỗi: {str(e)}")
