@@ -81,7 +81,7 @@ if option == "🔁 Lookup Bán ra & NXT":
                 st.error(f"Lỗi: {str(e)}")
 
 # --- Chức năng 2: Lookup theo mapping ---
-elif option == "📄 Lookup theo mapping":
+elif option == "📄 Lookup Mua vào & NXT":
     data_file = st.file_uploader("📤 Upload file Data", type=["xlsx"], key="data")
     mapping_file = st.file_uploader("📤 Upload file Mapping", type=["xlsx"], key="mapping")
 
@@ -104,8 +104,8 @@ elif option == "📄 Lookup theo mapping":
                     st.stop()
 
                 # Đặt tên cột
-                data_df.columns.values[[0, 4]] = ['TENDM', 'DGVND']
-                mapping_df.columns.values[[2, 4, 6]] = ['target_col', 'match_col', 'compare_col']
+                data_df.columns.values[[16, 25]] = ['TENDM', 'DGVND']
+                mapping_df.columns.values[[2, 4, 14]] = ['target_col', 'match_col', 'compare_col']
 
                 # Hàm làm sạch text
                 def clean_text(val):
